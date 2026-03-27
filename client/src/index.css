@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0f0f0f;
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #111318;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.font-mono {
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* Rarity colors */
+.rarity-consumer { color: #b0c3d9; }
+.rarity-industrial { color: #5e98d9; }
+.rarity-milspec { color: #4b69ff; }
+.rarity-restricted { color: #8847ff; }
+.rarity-classified { color: #d32ce6; }
+.rarity-covert { color: #eb4b4b; }
+.rarity-rare-special { color: #e4b900; }
+
+.rarity-bg-consumer { background: rgba(176,195,217,0.15); border-color: #b0c3d9; }
+.rarity-bg-industrial { background: rgba(94,152,217,0.15); border-color: #5e98d9; }
+.rarity-bg-milspec { background: rgba(75,105,255,0.15); border-color: #4b69ff; }
+.rarity-bg-restricted { background: rgba(136,71,255,0.15); border-color: #8847ff; }
+.rarity-bg-classified { background: rgba(211,44,230,0.15); border-color: #d32ce6; }
+.rarity-bg-covert { background: rgba(235,75,75,0.15); border-color: #eb4b4b; }
+.rarity-bg-rare-special { background: rgba(228,185,0,0.15); border-color: #e4b900; }
+
+/* Glow effects */
+.glow-gold { box-shadow: 0 0 20px rgba(228,185,0,0.5), 0 0 40px rgba(228,185,0,0.2); }
+.glow-red { box-shadow: 0 0 20px rgba(235,75,75,0.5), 0 0 40px rgba(235,75,75,0.2); }
+.glow-purple { box-shadow: 0 0 20px rgba(136,71,255,0.5), 0 0 40px rgba(136,71,255,0.2); }
+.glow-pink { box-shadow: 0 0 20px rgba(211,44,230,0.5), 0 0 40px rgba(211,44,230,0.2); }
+.glow-blue { box-shadow: 0 0 20px rgba(75,105,255,0.5), 0 0 40px rgba(75,105,255,0.2); }
+
+/* Pulse animation for click button */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(228,185,0,0.3); }
+  50% { box-shadow: 0 0 40px rgba(228,185,0,0.6), 0 0 60px rgba(228,185,0,0.3); }
+}
+.pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Odometer-style counter */
+@keyframes countUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Case reel animation */
+.case-reel {
+  display: flex;
+  transition: transform cubic-bezier(0.15, 0.85, 0.35, 1);
+}
+
+/* Spin animation for coinflip */
+@keyframes coinFlip {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(1800deg); }
+}
+.coin-flip { animation: coinFlip 2.5s cubic-bezier(0.25, 0.1, 0.25, 1); }
+
+/* Crash graph */
+.crash-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawLine 1s linear forwards;
+}
+@keyframes drawLine {
+  to { stroke-dashoffset: 0; }
+}
