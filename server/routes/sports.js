@@ -452,6 +452,16 @@ function startSportsEngine() {
   }, 15 * 1000);
 }
 
+// Sport label display names
+const SPORT_DISPLAY = {
+  AMERICANFOOTBALL: 'NFL',
+  BASKETBALL: 'NBA',
+  BASEBALL: 'MLB',
+  ICEHOCKEY: 'NHL',
+  SOCCER: 'Soccer',
+  MMA: 'MMA',
+};
+
 // ===== ROUTES =====
 
 // GET /api/sports/matches — upcoming matches with odds
@@ -519,14 +529,32 @@ router.get('/results', (req, res) => {
   const result = matches.map(m => {
     const team1Data = TEAMS.find(t => t.name === m.team1) || { color: '#666' };
     const team2Data = TEAMS.find(t => t.name === m.team2) || { color: '#666' };
+    const isReal = m.format === 'real';
+    const sportLabel = isReal ? (SPORT_DISPLAY[m.map] || m.map || 'Sports') : null;
     return {
       ...m,
       team1_color: team1Data.color,
       team2_color: team2Data.color,
+      is_real: isReal,
+      sport_label: sportLabel,
     };
   });
 
   res.json(result);
+});
+
+// GET /api/sports/match-bets/:matchId — all open bets on a match
+router.get('/match-bets/:matchId', (req, res) => {
+  init();
+  const db = getDb();
+  const bets = db.prepare(`
+    SELECT sb.bet_type, sb.selection, sb.amount, sb.odds_at_bet, p.name as player_name
+    FROM sports_bets sb
+    JOIN players p ON sb.player_id = p.id
+    WHERE sb.match_id = ? AND sb.status = 'pending'
+    ORDER BY sb.amount DESC
+  `).all(req.params.matchId);
+  res.json(bets);
 });
 
 // POST /api/sports/bet — place a bet
@@ -611,24 +639,21 @@ router.get('/teams', (req, res) => {
 
 // Delay engine start until DB is ready
 setTimeout(() => {
-  try { startSportsEngine(); } catch (e) { console.error('[Sports] Engine start failed:', e.message); }
-}, 5000);
-
-// ===== REAL SPORTS SYNC (if API key is set) =====
-if (REAL_SPORTS_ENABLED) {
-  console.log('[Sports] Real sports enabled via The Odds API');
-  // Initial sync after 5 seconds
-  setTimeout(() => {
-    syncRealMatches().catch(e => console.error('[Sports] Sync error:', e.message));
-  }, 5000);
-  // Then every 15 minutes
-  setInterval(() => {
+  if (REAL_SPORTS_ENABLED) {
+    // Real sports mode — only sync real matches, no simulated CS:GO
+    console.log('[Sports] Real sports enabled via The Odds API');
     syncRealMatches().catch(e => console.error('[Sports] Sync error:', e.message));
     resolveRealMatches().catch(e => console.error('[Sports] Resolve error:', e.message));
-  }, 15 * 60 * 1000);
-} else {
-  console.log('[Sports] Real sports disabled (no ODDS_API_KEY). Using simulated CS:GO matches.');
-}
+    setInterval(() => {
+      syncRealMatches().catch(e => console.error('[Sports] Sync error:', e.message));
+      resolveRealMatches().catch(e => console.error('[Sports] Resolve error:', e.message));
+    }, 15 * 60 * 1000);
+  } else {
+    // Simulated CS:GO mode
+    console.log('[Sports] Real sports disabled (no ODDS_API_KEY). Using simulated CS:GO matches.');
+    try { startSportsEngine(); } catch (e) { console.error('[Sports] Engine start failed:', e.message); }
+  }
+}, 5000);
 
 // Status endpoint
 router.get('/status', (req, res) => {

@@ -36,6 +36,11 @@ function formatTimeUntil(seconds) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
 
+const SPORT_DISPLAY = {
+  AMERICANFOOTBALL: 'NFL', BASKETBALL: 'NBA', BASEBALL: 'MLB',
+  ICEHOCKEY: 'NHL', SOCCER: 'Soccer', MMA: 'MMA',
+};
+
 export default function Sports() {
   const { activePlayer, fetchPlayers, pingNGame } = useGameStore();
   const [tab, setTab] = useState('upcoming'); // upcoming, live, results, mybets
@@ -44,10 +49,12 @@ export default function Sports() {
   const [results, setResults] = useState([]);
   const [myBets, setMyBets] = useState([]);
   const [expandedMatch, setExpandedMatch] = useState(null);
+  const [matchBets, setMatchBets] = useState({}); // { [matchId]: [...bets] }
   const [betSlip, setBetSlip] = useState(null); // { matchId, betType, selection, odds, team1, team2 }
   const [betAmount, setBetAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isRealSports, setIsRealSports] = useState(false);
 
   const fetchMatches = useCallback(async () => {
     try {
@@ -82,8 +89,17 @@ export default function Sports() {
     } catch (e) {}
   }, [activePlayer]);
 
+  const fetchMatchBets = useCallback(async (matchId) => {
+    try {
+      const res = await fetch(`/api/sports/match-bets/${matchId}`);
+      const data = await res.json();
+      setMatchBets(prev => ({ ...prev, [matchId]: data }));
+    } catch (e) {}
+  }, []);
+
   useEffect(() => {
     pingNGame({ screen: 'in_game', mode: 'sports' });
+    fetch('/api/sports/status').then(r => r.json()).then(d => setIsRealSports(d.realSportsEnabled)).catch(() => {});
     fetchMatches();
     fetchLive();
     fetchResults();
@@ -173,10 +189,12 @@ export default function Sports() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              <span className="text-3xl">🎮</span>
-              CS:GO Match Betting
+              <span className="text-3xl">{isRealSports ? '🏆' : '🎮'}</span>
+              {isRealSports ? 'Sports Betting' : 'CS:GO Match Betting'}
             </h1>
-            <p className="text-gray-500 text-sm mt-1">Bet on simulated pro matches</p>
+            <p className="text-gray-500 text-sm mt-1">
+              {isRealSports ? 'Real-world sports — NFL, NBA, MLB, NHL, Soccer, MMA' : 'Bet on simulated pro matches'}
+            </p>
           </div>
           <div className="text-right">
             <div className="text-gray-500 text-xs">Your Balance</div>
@@ -247,7 +265,11 @@ export default function Sports() {
                   {/* Match Header */}
                   <div
                     className="p-4 cursor-pointer"
-                    onClick={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)}
+                    onClick={() => {
+                      const next = expandedMatch === match.id ? null : match.id;
+                      setExpandedMatch(next);
+                      if (next) fetchMatchBets(next);
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       {/* Team 1 */}
@@ -261,8 +283,14 @@ export default function Sports() {
 
                       {/* Match Info */}
                       <div className="text-center px-4">
-                        <div className="text-yellow-400 font-bold text-xs uppercase">{match.format?.toUpperCase()}</div>
-                        <div className="text-gray-500 text-[10px] mt-0.5">{match.map}</div>
+                        <div className="text-yellow-400 font-bold text-xs uppercase">
+                          {match.format === 'real'
+                            ? (SPORT_DISPLAY[match.map] || match.map || 'Sports')
+                            : match.format?.toUpperCase()}
+                        </div>
+                        {match.format !== 'real' && (
+                          <div className="text-gray-500 text-[10px] mt-0.5">{match.map}</div>
+                        )}
                         <div className="text-gray-400 text-xs mt-1 font-mono">
                           {formatTimeUntil(match.time_until_start)}
                         </div>
@@ -303,7 +331,7 @@ export default function Sports() {
                     </div>
                   </div>
 
-                  {/* Expanded: Over/Under bets */}
+                  {/* Expanded: Over/Under bets + Open Bets */}
                   <AnimatePresence>
                     {expandedMatch === match.id && (
                       <motion.div
@@ -313,32 +341,86 @@ export default function Sports() {
                         transition={{ duration: 0.2 }}
                         className="overflow-hidden"
                       >
-                        <div className="px-4 pb-4 pt-2 border-t border-gray-800/50">
-                          <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Total Rounds</div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => addToBetSlip(match, 'over_rounds', match.over_under_line?.toString() || '26.5', match.over_odds || 1.90)}
-                              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                                betSlip?.matchId === match.id && betSlip?.betType === 'over_rounds'
-                                  ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-400'
-                                  : 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:bg-gray-700/50'
-                              }`}
-                            >
-                              Over {match.over_under_line || 26.5}
-                              <span className="text-yellow-400/80 ml-1">{(match.over_odds || 1.90).toFixed(2)}</span>
-                            </button>
-                            <button
-                              onClick={() => addToBetSlip(match, 'under_rounds', match.over_under_line?.toString() || '26.5', match.under_odds || 1.90)}
-                              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all border ${
-                                betSlip?.matchId === match.id && betSlip?.betType === 'under_rounds'
-                                  ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-400'
-                                  : 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:bg-gray-700/50'
-                              }`}
-                            >
-                              Under {match.over_under_line || 26.5}
-                              <span className="text-yellow-400/80 ml-1">{(match.under_odds || 1.90).toFixed(2)}</span>
-                            </button>
-                          </div>
+                        <div className="px-4 pb-4 pt-2 border-t border-gray-800/50 space-y-3">
+                          {/* Over/Under — only for simulated CS:GO matches */}
+                          {match.format !== 'real' && (
+                            <div>
+                              <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Total Rounds</div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => addToBetSlip(match, 'over_rounds', match.over_under_line?.toString() || '26.5', match.over_odds || 1.90)}
+                                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                                    betSlip?.matchId === match.id && betSlip?.betType === 'over_rounds'
+                                      ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-400'
+                                      : 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:bg-gray-700/50'
+                                  }`}
+                                >
+                                  Over {match.over_under_line || 26.5}
+                                  <span className="text-yellow-400/80 ml-1">{(match.over_odds || 1.90).toFixed(2)}</span>
+                                </button>
+                                <button
+                                  onClick={() => addToBetSlip(match, 'under_rounds', match.over_under_line?.toString() || '26.5', match.under_odds || 1.90)}
+                                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all border ${
+                                    betSlip?.matchId === match.id && betSlip?.betType === 'under_rounds'
+                                      ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-400'
+                                      : 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:bg-gray-700/50'
+                                  }`}
+                                >
+                                  Under {match.over_under_line || 26.5}
+                                  <span className="text-yellow-400/80 ml-1">{(match.under_odds || 1.90).toFixed(2)}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Open Bets on this match */}
+                          {(() => {
+                            const bets = matchBets[match.id] || [];
+                            if (bets.length === 0) return (
+                              <div className="text-xs text-gray-600 italic">No bets placed yet</div>
+                            );
+                            const team1Bets = bets.filter(b => b.bet_type === 'winner' && b.selection === match.team1);
+                            const team2Bets = bets.filter(b => b.bet_type === 'winner' && b.selection === match.team2);
+                            const team1Total = team1Bets.reduce((s, b) => s + b.amount, 0);
+                            const team2Total = team2Bets.reduce((s, b) => s + b.amount, 0);
+                            return (
+                              <div>
+                                <div className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Open Bets ({bets.length})</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-gray-800/40 rounded-lg p-2">
+                                    <div className="text-xs font-medium text-gray-300 mb-1">{match.team1}</div>
+                                    {team1Bets.length === 0 ? (
+                                      <div className="text-xs text-gray-600">No bets</div>
+                                    ) : (
+                                      <>
+                                        <div className="text-xs text-yellow-400 font-bold">{formatPrice(team1Total)}</div>
+                                        {team1Bets.map((b, i) => (
+                                          <div key={i} className="text-[10px] text-gray-500 mt-0.5">
+                                            {b.player_name}: {formatPrice(b.amount)}
+                                          </div>
+                                        ))}
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="bg-gray-800/40 rounded-lg p-2">
+                                    <div className="text-xs font-medium text-gray-300 mb-1">{match.team2}</div>
+                                    {team2Bets.length === 0 ? (
+                                      <div className="text-xs text-gray-600">No bets</div>
+                                    ) : (
+                                      <>
+                                        <div className="text-xs text-yellow-400 font-bold">{formatPrice(team2Total)}</div>
+                                        {team2Bets.map((b, i) => (
+                                          <div key={i} className="text-[10px] text-gray-500 mt-0.5">
+                                            {b.player_name}: {formatPrice(b.amount)}
+                                          </div>
+                                        ))}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </motion.div>
                     )}
@@ -403,33 +485,39 @@ export default function Sports() {
                 <div>No completed matches yet</div>
               </div>
             ) : (
-              results.map(match => (
-                <div
-                  key={match.id}
-                  className="bg-[#1a1a24] border border-gray-800/50 rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <TeamLogo name={match.team1} size={36} />
-                      <span className={`font-semibold ${match.score1 > match.score2 ? 'text-green-400' : 'text-gray-400'}`}>
-                        {match.team1}
-                      </span>
-                    </div>
-                    <div className="text-center px-4">
-                      <div className="text-xl font-bold font-mono text-white">
-                        {match.score1} - {match.score2}
+              results.map(match => {
+                const isReal = match.is_real || match.format === 'real';
+                const label = isReal
+                  ? (match.sport_label || SPORT_DISPLAY[match.map] || match.map || 'Sports')
+                  : `${match.format?.toUpperCase()} \u2022 ${match.map}`;
+                return (
+                  <div
+                    key={match.id}
+                    className="bg-[#1a1a24] border border-gray-800/50 rounded-xl p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <TeamLogo name={match.team1} size={36} />
+                        <span className={`font-semibold ${match.score1 > match.score2 ? 'text-green-400' : 'text-gray-400'}`}>
+                          {match.team1}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-gray-600 uppercase">{match.format} &bull; {match.map}</div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-1 justify-end">
-                      <span className={`font-semibold ${match.score2 > match.score1 ? 'text-green-400' : 'text-gray-400'}`}>
-                        {match.team2}
-                      </span>
-                      <TeamLogo name={match.team2} size={36} />
+                      <div className="text-center px-4">
+                        <div className="text-xl font-bold font-mono text-white">
+                          {match.score1} - {match.score2}
+                        </div>
+                        <div className="text-[10px] text-gray-600 uppercase">{label}</div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-1 justify-end">
+                        <span className={`font-semibold ${match.score2 > match.score1 ? 'text-green-400' : 'text-gray-400'}`}>
+                          {match.team2}
+                        </span>
+                        <TeamLogo name={match.team2} size={36} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

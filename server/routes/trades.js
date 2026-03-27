@@ -1,13 +1,46 @@
 const express = require('express');
 const router = express.Router();
 const { getDb, addToWallet, deductFromWallet } = require('../db/database');
+const { getSkinPrice } = require('../data/skinPrices');
 
-// GET /api/trades/inventory/:playerId - Get any player's inventory (public view)
+// GET /api/trades/inventory/:playerId - Get any player's inventory (public view, with prices)
 router.get('/inventory/:playerId', (req, res) => {
   const db = getDb();
   const items = db.prepare(
     'SELECT * FROM inventory WHERE player_id = ? ORDER BY obtained_at DESC'
   ).all(req.params.playerId);
+
+  const getCache = db.prepare('SELECT price_usd FROM price_cache WHERE market_hash_name = ?');
+
+  for (const item of items) {
+    let price = 0;
+    const hashName = item.market_hash_name || '';
+    const isSticker = /^sticker\s*\|/i.test(hashName);
+    const isGlove = /gloves|wraps/i.test(hashName);
+
+    if (!isSticker && !isGlove) {
+      const cached = getCache.get(hashName);
+      if (cached && cached.price_usd > 0) price = cached.price_usd;
+
+      if (price <= 0) {
+        const noWear = hashName.replace(/\s*\((?:Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\)\s*$/i, '');
+        if (noWear !== hashName) {
+          const noWearCached = getCache.get(noWear);
+          if (noWearCached && noWearCached.price_usd > 0) price = noWearCached.price_usd;
+        }
+      }
+    }
+
+    if (price <= 0) {
+      const base = item.skin_name || '';
+      const wear = item.wear || 'Field-Tested';
+      const fullName = item.stattrak ? ('StatTrak ' + base) : base;
+      price = getSkinPrice(fullName, wear, item.rarity);
+    }
+
+    item.price = (isNaN(price) || price <= 0) ? 1 : Math.round(price * 100) / 100;
+  }
+
   res.json(items);
 });
 
